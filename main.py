@@ -1,22 +1,32 @@
 import asyncio
-import ww, yo
+import ww, yo, o
 
+
+ww.Conf.PROJECT   = 'test'
+ww.Conf.DB_PATH   = f'{ww.Conf.PROJECT}.db'
+ww.Conf.EXPERTISE = ww.expertise
+
+o.Db.drop_all_tables()
+
+domain = 'bread'
 query  = 'what is the baking temperature'
 
-asyncio.run(ww.tools.ExpertiseTool(
-	query = query,
-	top_k = 5,
+result = asyncio.run(ww.tools.ExpertiseTool()(
+	domain = domain,
+	query  = query,
+	top_k  = 5,
 ))
 
 print()
-print('-' * 50)
+print('=' * 80)
 print('QUERY:', query)
-print('-' * 50)
+print('=' * 80)
 
-yo.viz.ScoredText([
-	(idx, score, texts[idx])
-	for idx, score in scores
-])
+for document, items in result.items():
+	print('Document:', document)
+	print('-' * 80)
+
+	yo.viz.ScoredText(items)
 
 
 

@@ -2,7 +2,7 @@
 # Base class for deterministic execution tools.
 # ======================================================================
 
-import ww
+import ww, yo
 
 
 class Tool(ww.base.Operator):
@@ -11,8 +11,7 @@ class Tool(ww.base.Operator):
 	# ----------------------------------------------------------------------
 	def __init__(self, name=None):
 		super().__init__(name=name)                      # Initialize operator base
-		Registry('state', self)                          # Register state registry
-
+		self.state = yo.struct.D()
 
 	# ======================================================================
 	# PUBLIC METHODS

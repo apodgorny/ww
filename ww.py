@@ -1,9 +1,14 @@
-import sys
+from whitelabel.wl import WL
 
-from white_label import WhiteLabel
+def initialize(ww, o, yo):
+	o.Db.connect('sqlite:///db.sqlite3')
 
-class WW(WhiteLabel):
-	foo = 'bar'
-
-WW.imp('/Users/alexander/dev/yo/yo.py')
-WW()
+WL.define(
+	'ww',
+	__file__,
+	import_libs = [
+		'/Users/alexander/dev/yo/yo.py',
+		'/Users/alexander/dev/o/o.py'
+	],
+	on_initialize = initialize
+)

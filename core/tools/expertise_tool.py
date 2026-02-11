@@ -16,14 +16,14 @@ class ExpertiseTool(ww.base.Tool):
 	# Perform semantic web search and return relevant chunks
 	# ----------------------------------------------------------------------
 	async def invoke(self,
-		query     : str,  # User-provided search query or intent text
-		top_k     : int,
-		max_steps : int
+		domain    : str,
+		query     : str,
+		top_k     : int
 	) -> list[str]:
 		
-		items = ww.services.ExpertiseService.search(
-			query     = query,
-			top_k     = top_k,
-			max_steps = max_steps
+		items = ww.services.Expertise.search(
+			domain_key = domain,
+			query      = query,
+			top_k      = top_k
 		)
 		return items

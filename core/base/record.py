@@ -1,60 +1,105 @@
-import enum, json
-from datetime import date, datetime
+from typing import ClassVar, Any
+from pydantic import BaseModel, model_validator
 
-from sqlalchemy.ext.declarative import DeclarativeMeta
-from sqlalchemy.orm             import declarative_base
-
-Base: DeclarativeMeta = declarative_base()
+import ww
 
 
-class Record(Base):
-	__abstract__ = True
+class DbRecord(BaseModel):
+	"""
+	Live DB-backed record.
+	- DTO
+	- validated object
+	- persistence-aware
+	"""
 
-	def __str__(self):
-		return self.__repr__()
+	# ---- Static contract ----
+	__table__ : ClassVar[str]
+	__pk__    : ClassVar[str | tuple[str, ...]]
 
-	def __repr__(self):
-		id_str = f'({self.id})' if self.id else ''
-		return f'{self.__class__.__name__}{id_str}: ' + self.to_json()
+	# ---- Runtime wiring ----
+	_db : ClassVar = ww.services.Db
 
-	# Convenience: add this instance to the global session
-	# ----------------------------------------------------------------------
-	def add(self, flush=True):
-		self.session.add(self)
-		if flush:
-			self.session.flush()
-		return self
 
-	# Convenience: delete this instance from the global session
-	# ----------------------------------------------------------------------
-	def delete(self, flush=True):
-		self.session.delete(self)
-		if flush:
-			self.session.flush()
+	# ==================================================================
+	# Core helpers
+	# ==================================================================
 
-	@staticmethod
-	def _json_default(obj):
-		if isinstance(obj, (datetime, date)):
-			return obj.isoformat()
-		return str(obj)  # fallback
+	def _values(self) -> dict[str, Any]:
+		"""Values to persist"""
+		return self.model_dump(exclude_none=True)
 
-	def to_json(self) -> str:
-		return json.dumps(
-			self.to_dict(),
-			ensure_ascii = False,
-			indent       = 4,
-			default      = self._json_default
+	def _pk_fields(self) -> tuple[str, ...]:
+		if isinstance(self.__pk__, str):
+			return (self.__pk__,)
+		return tuple(self.__pk__)
+
+	def _pk_where(self) -> dict[str, Any]:
+		where = {}
+		for k in self._pk_fields():
+			v = getattr(self, k, None)
+			if v is None:
+				raise ValueError(f'Primary key `{k}` is None')
+			where[k] = v
+		return where
+
+	def _apply_pk(self, pk):
+		"""
+		Apply returned pk to self.
+		Supports:
+		- single int
+		- dict of pk fields
+		"""
+		if pk is None:
+			return
+
+		if isinstance(pk, dict):
+			for k, v in pk.items():
+				setattr(self, k, v)
+		else:
+			setattr(self, self._pk_fields()[0], pk)
+
+
+	# ==================================================================
+	# Persistence
+	# ==================================================================
+
+	def save(self):
+		"""
+		Insert or update.
+		Always validated.
+		"""
+		self.model_validate(self.model_dump())
+
+		pk = self._db.upsert(
+			self.__table__,
+			self._values(),
+			self._pk_fields(),
 		)
 
-	def to_dict(self) -> dict[str, any]:
-		result = {}
-		for c in self.__table__.columns:
-			value = getattr(self, c.name)
-			if isinstance(value, enum.Enum):
-				value = value.value
-			result[c.name] = value
-		return result
+		self._apply_pk(pk)
+		return self
+
+	def delete(self):
+		self._db.delete(
+			self.__table__,
+			self._pk_where(),
+		)
+		return True
+
+
+	# ==================================================================
+	# Loading
+	# ==================================================================
 
 	@classmethod
-	def from_dict(cls, data: dict[str, any]) -> 'TableBase':
-		return cls(**data)
+	def select(cls, **where):
+		rows = cls._db.select(
+			cls.__table__,
+			where = where or None
+		)
+		return [cls(**row) for row in rows]
+
+	@classmethod
+	def get(cls, **where):
+		rows = cls.select(**where)
+		return rows[0] if rows else None

@@ -6,10 +6,10 @@ import json
 
 import requests
 
-from wordwield.core.base.service import Service
+import ww
 
 
-class GoogleService(Service):
+class GoogleService(ww.Service):
 
 	# Service initialization
 	# ----------------------------------------------------------------------

@@ -4,10 +4,10 @@
 
 import time, os
 
-from wordwield.core.base.service import Service
+import ww
 
 
-class WebSearchService(Service):
+class WebSearchService(ww.Service):
 
 	# Initialize service
 	# ----------------------------------------------------------------------

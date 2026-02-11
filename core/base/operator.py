@@ -6,10 +6,10 @@ import ww
 
 class Operator(ww.Module):
 	def __init__(self, name=None):
-		self.name = name
+		self.name = name if name else self.__class__.__name__
 	
 	def __repr__(self) -> str:
-		return f'<Operator {self.__class__.__name__}>'
+		return f'<Operator {self.name}>'
 
 	async def __call__(self, *args, **kwargs):
 		await self.init()

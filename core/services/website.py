@@ -10,10 +10,10 @@ import trafilatura
 
 from tqdm import tqdm
 
-from wordwield.core.base.service import Service
+import ww
 
 
-class WebsiteService(Service):
+class WebsiteService(ww.Service):
 	timeout    = 20
 	user_agent = 'WordWield-Website/1.0'
 
