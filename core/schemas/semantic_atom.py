@@ -1,6 +1,6 @@
 import ww, o, yo
 
-ww.schemas.SemanticDocument
+o.T.SemanticDocument
 
 
 class SemanticAtom(o.Schema):

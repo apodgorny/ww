@@ -5,7 +5,7 @@
 import time
 import requests
 
-import ww
+import ww, o
 
 
 class Google(ww.Service):
@@ -35,7 +35,7 @@ class Google(ww.Service):
 				'datepublished',
 				'pubdate'
 			):
-				point = self.ww.schemas.TimePointSchema.from_iso(tag.get(key))
+				point = o.T.TimePoint.from_iso(tag.get(key))
 				if point is not None:
 					result = point.timestamp
 					break
@@ -84,7 +84,7 @@ class Google(ww.Service):
 		# --------------------------------------------------------------
 		# 1. Try cache
 		# --------------------------------------------------------------
-		cache = self.ww.schemas.WebQuery.get_one(
+		cache = o.T.WebQuery.get_one(
 			query = query,
 			top_k = top_k
 		)
@@ -93,12 +93,12 @@ class Google(ww.Service):
 
 		if cache is not None:
 			data = cache.results
-			self.log(f'Loaded `{query}` from cache')
+			self.print(f'Loaded `{query}` from cache')
 		else:
-			self.log(f'Searching `{query}` via Google')
+			self.print(f'Searching `{query}` via Google')
 			data = self._request(query, top_k)
 
-			self.ww.schemas.WebQuery(
+			o.T.WebQuery(
 				query   = query,
 				top_k   = top_k,
 				results = data,
@@ -124,7 +124,7 @@ class Google(ww.Service):
 			is_valid = bool(link) and not too_old and not too_recent
 
 			if is_valid:
-				results.append(self.ww.schemas.DocSchema(
+				results.append(o.T.WebPage(
 					name    = link,
 					title   = item.get('title'),
 					snippet = item.get('snippet'),
@@ -132,6 +132,6 @@ class Google(ww.Service):
 					source  = 'google'
 				))
 
-		self.log(f'Found {len(results)} results')
+		self.print(f'Found {len(results)} results')
 
 		return results

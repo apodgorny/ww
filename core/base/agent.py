@@ -74,7 +74,7 @@ class Agent(ww.base.Operator):
 				full_stream_name = f'{self.__class__.ns}.{self.name}__{stream_name}'.replace(
 					'operators.', ''
 				)
-				stream = self.ww.schemas.StreamSchema.put(
+				stream = o.T.StreamSchema.put(
 					name   = full_stream_name,
 					role   = stream_name,
 					author = self.name
@@ -124,7 +124,7 @@ class Agent(ww.base.Operator):
 
 		try:
 			template  = String.unindent(template)
-			all_vars  = {**self.state.to_dict(), **vars, 'ww': self.ww}
+			all_vars  = {**self.state.to_dict(), **vars, 'ww': ww}
 			env       = Environment(loader=BaseLoader())
 			env.globals = {'len': len}
 			jinja     = env.from_string(template)
@@ -155,7 +155,7 @@ class Agent(ww.base.Operator):
 
 		self.log(f'\n========================[ 😎 AGENT `{self.name}` ]========================\n')
 
-		partial = await self.ww.ask(
+		partial = await ww.ask(
 			prompt  = prompt,
 			schema  = llm_schema,
 			verbose = verbose

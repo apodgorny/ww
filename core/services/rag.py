@@ -7,10 +7,6 @@ from collections import defaultdict
 import ww, yo, o
 
 
-ww.schemas.SemanticDomain
-ww.schemas.SemanticDocument
-ww.schemas.SemanticAtom
-
 
 class Rag(ww.Service):
 
@@ -28,6 +24,7 @@ class Rag(ww.Service):
 	# Remove all temporary domains from database.
 	# ------------------------------------------------------------------
 	def _hydrate(self):
+		self.print('Hydrating Vector Database ... ', end='', flush=True)
 		ww.Timer.start('hydration')
 		# Drop all temporary domains (DB only)
 		# - - - - - - - - - - - - - - - - - - - -
@@ -57,7 +54,7 @@ class Rag(ww.Service):
 						document_offset,
 						vectors
 					)
-		ww.Timer.stop('hydration', report=True)
+		print(ww.Timer.stop('hydration').get_time(), 's', sep='')
 
 	# Split full document text into atom texts and vectors.
 	# ------------------------------------------------------------------
@@ -88,6 +85,11 @@ class Rag(ww.Service):
 
 		self.vdb.add_domain(domain.id)
 		return domain
+
+	# Has domain been added?
+	# ------------------------------------------------------------------
+	def has_domain(self, id_or_key):
+		return o.T.SemanticDomain.has(id_or_key)
 
 	# Remove domain and all its documents and vectors.
 	# ------------------------------------------------------------------
@@ -154,9 +156,11 @@ class Rag(ww.Service):
 	# ------------------------------------------------------------------
 	def search(self, domain_id_or_key, query, top_k):
 		ww.Timer.start('search')
+		
 		domain  = o.T.SemanticDomain.load(domain_id_or_key)
-		self.print(f'Searching domain `{domain.key}`')
 		results = []
+
+		self.print(f'Searching`{domain.key}` for `{query}` ... ', end='', flush=True)
 
 		if domain is not None:
 			query_vector = yo.models.Encoder.encode(query)
@@ -186,8 +190,8 @@ class Rag(ww.Service):
 
 			for key in d:
 				d[key].sort(key=lambda x: x[0])
-			ww.Timer.stop('search', report=True)
 
+		print(ww.Timer.stop('search').get_time(), 's', sep='')
 		return d
 
 

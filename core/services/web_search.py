@@ -2,7 +2,7 @@
 # WebSearch
 # ======================================================================
 
-import ww
+import ww, o
 
 
 class WebSearch(ww.Service):
@@ -10,7 +10,7 @@ class WebSearch(ww.Service):
 	def initialize(self):
 		self.rag     = ww.services.Rag
 		self.google  = ww.services.Google
-		self.website = ww.services.Website
+		self.website = ww.services.WebSite
 
 	# ----------------------------------------------------------------------
 	def get_domain_id(self, query):
@@ -24,6 +24,12 @@ class WebSearch(ww.Service):
 		# 1. Ingest only if domain does not exist
 		if not self.rag.has_domain(domain_key):
 
+			domain = self.rag.add_domain(
+				key         = domain_key,
+				temporary   = True,
+				description = query
+			)
+
 			docs = self.google.search(
 				query      = query,
 				time_range = (None, None),
@@ -35,12 +41,11 @@ class WebSearch(ww.Service):
 			for doc in docs:
 				if doc and doc.text:
 					self.rag.add_document(
-						domain_id    = domain_key,
+						domain_id    = domain.id,
 						document_key = doc.name,
 						text         = doc.text,
 						mtime        = doc.mtime,
-						description  = doc.title,
-						temporary    = True
+						description  = doc.title
 					)
 
 		# 2. Search
