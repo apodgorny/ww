@@ -1,28 +1,27 @@
 # ======================================================================
-# Google search service (discovery only).
+# Google — web discovery (with DB cache)
 # ======================================================================
 
-import json
-
+import time
 import requests
 
 import ww
 
 
-class GoogleService(ww.Service):
+class Google(ww.Service):
 
-	# Service initialization
+	# Initialize service
 	# ----------------------------------------------------------------------
 	def initialize(self):
-		self.google_api_key   = self.ww.env.GOOGLE_API_KEY
-		self.search_engine_id = self.ww.env.GOOGLE_SEARCH_ENGINE_ID
+		self.google_api_key   = ww.Conf.GOOGLE_API_KEY
+		self.search_engine_id = ww.Conf.GOOGLE_SEARCH_ENGINE_ID
 		self.timeout          = 20
 
 	# ======================================================================
 	# PRIVATE METHODS
 	# ======================================================================
 
-	# Extract publication date from search item
+	# Extract publication timestamp from Google item
 	# ----------------------------------------------------------------------
 	def _publish_date(self, item):
 		result = None
@@ -42,55 +41,87 @@ class GoogleService(ww.Service):
 					break
 			if result is not None:
 				break
+
 		return result
 
-	# Query Google search API.
-	# ----------------------------------------------------------------------
-	def _search(self, query, time_range, top_k):
-		# cache_key = f'{query} {time_range} {top_k}'
-		# print(cache_key)
-		# web_search = self.ww.schemas.WebSearchSchema.load(cache_key)
-		# if web_search:
 
+	# Perform raw Google API request
+	# ----------------------------------------------------------------------
+	def _request(self, query, top_k):
 		if not self.google_api_key or not self.search_engine_id:
 			raise RuntimeError('Google search credentials are not configured.')
 
-		google_api_url = 'https://www.googleapis.com/customsearch/v1'
-		from_ts, to_ts = time_range                                     # Unix timestamps
-		from_point     = self.ww.schemas.TimePointSchema.create(from_ts) if from_ts is not None else None
-		to_point       = self.ww.schemas.TimePointSchema.create(to_ts) if to_ts is not None else None
+		url = 'https://www.googleapis.com/customsearch/v1'
 
-		params = {
-			'key' : self.google_api_key,
-			'cx'  : self.search_engine_id,
-			'q'   : query,
-			'num' : min(top_k, 10)
-		}
+		params = dict(
+			key = self.google_api_key,
+			cx  = self.search_engine_id,
+			q   = query,
+			num = min(top_k, 10)
+		)
 
-		self.log(f'Searching `{query}` ...')
 		response = requests.get(
-			google_api_url,
+			url,
 			params  = params,
 			timeout = self.timeout
 		)
 
 		response.raise_for_status()
 
-		data    = response.json()
-		items   = data.get('items', [])
+		return response.json()
+
+
+	# ======================================================================
+	# PUBLIC METHODS
+	# ======================================================================
+
+	# Perform Google search with DB caching
+	# ----------------------------------------------------------------------
+	def search(self, query, time_range=None, top_k=5):
+
 		results = []
 
+		# --------------------------------------------------------------
+		# 1. Try cache
+		# --------------------------------------------------------------
+		cache = self.ww.schemas.WebQuery.get_one(
+			query = query,
+			top_k = top_k
+		)
+
+		data = None
+
+		if cache is not None:
+			data = cache.results
+			self.log(f'Loaded `{query}` from cache')
+		else:
+			self.log(f'Searching `{query}` via Google')
+			data = self._request(query, top_k)
+
+			self.ww.schemas.WebQuery(
+				query   = query,
+				top_k   = top_k,
+				results = data,
+				created = int(time.time())
+			).save()
+
+
+		# --------------------------------------------------------------
+		# 2. Filter and normalize
+		# --------------------------------------------------------------
+		items = data.get('items', []) if data else []
+
+		from_ts, to_ts = time_range if time_range else (None, None)
+
 		for item in items:
-			print(item.get('link'), self._publish_date(item))
-			link       = item.get('link')
-			published  = self._publish_date(item)
-			too_old    = from_point and published and published < from_point.timestamp
-			too_recent = to_point   and published and published > to_point.timestamp
 
-			is_valid = bool(link)
+			link      = item.get('link')
+			published = self._publish_date(item)
 
-			if too_old or too_recent:
-				is_valid = False
+			too_old    = from_ts and published and published < from_ts
+			too_recent = to_ts   and published and published > to_ts
+
+			is_valid = bool(link) and not too_old and not too_recent
 
 			if is_valid:
 				results.append(self.ww.schemas.DocSchema(
@@ -100,16 +131,7 @@ class GoogleService(ww.Service):
 					mtime   = published,
 					source  = 'google'
 				))
-			exit(1)
-		return results
 
-	# ======================================================================
-	# PUBLIC METHODS
-	# ======================================================================
-
-	# Perform a Google search
-	# ----------------------------------------------------------------------
-	def search(self, query, time_range, top_k):
-		results = self._search(query=query, time_range=time_range, top_k=top_k)
 		self.log(f'Found {len(results)} results')
+
 		return results

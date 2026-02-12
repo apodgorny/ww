@@ -28,7 +28,7 @@ class Rag(ww.Service):
 	# Remove all temporary domains from database.
 	# ------------------------------------------------------------------
 	def _hydrate(self):
-
+		ww.Timer.start('hydration')
 		# Drop all temporary domains (DB only)
 		# - - - - - - - - - - - - - - - - - - - -
 		for domain in o.T.SemanticDomain.get_all(temporary=True):
@@ -37,6 +37,7 @@ class Rag(ww.Service):
 		# Load persistent domains into VDB
 		# - - - - - - - - - - - - - - - - - - - -
 		for domain in o.T.SemanticDomain.get_all(temporary=False):
+			self.vdb.add_domain(domain.id)
 			for document in domain.get_documents():
 
 				vector_ids    = []
@@ -56,12 +57,13 @@ class Rag(ww.Service):
 						document_offset,
 						vectors
 					)
+		ww.Timer.stop('hydration', report=True)
 
 	# Split full document text into atom texts and vectors.
 	# ------------------------------------------------------------------
 	def _vectorize(self, text: str):
 		texts   = yo.parsers.Pysbd(text)
-		vectors = yo.models.Encoder.encode_sequence(texts)
+		vectors = yo.models.Encoder.encode_sequence_batch(texts, karma=0.3, with_attentions=False)
 		return texts, vectors
 
 	# Rerank results from vdb
@@ -69,7 +71,6 @@ class Rag(ww.Service):
 	def _rerank(self, query, results, min_score, top_k):
 		texts    = [item['text'] for item in results]
 		reranked = yo.models.Reranker.score(query, texts, min_score, top_k)
-
 		return [{**results[idx], 'score': score} for idx, score in reranked]
 
 	# ==================================================================
@@ -85,8 +86,6 @@ class Rag(ww.Service):
 			temporary   = temporary
 		).save()
 
-		print('Created domain', domain)
-		
 		self.vdb.add_domain(domain.id)
 		return domain
 
@@ -106,7 +105,9 @@ class Rag(ww.Service):
 	# Strategy: remove and re-insert (DB), range-remove (VDB).
 	# ------------------------------------------------------------------
 	def add_document(self, domain_id, document_key, text, mtime, description=''):
+		ww.Timer.start('vectorize')
 		texts, vectors = self._vectorize(text)
+		ww.Timer.stop('vectorize', report=True)
 		domain         = o.T.SemanticDomain.load(domain_id)
 		
 		document = o.T.SemanticDocument(
@@ -116,7 +117,11 @@ class Rag(ww.Service):
 			description = description
 		).save()
 
+		ww.Timer.start('add_atoms')
+		o.Db.tx_begin()
 		vector_ids      = document.add_atoms(texts, vectors)
+		o.Db.tx_end()
+		ww.Timer.stop('add_atoms', report=True)
 		document_offset = min(vector_ids)
 
 		self.vdb.add_document(
@@ -125,10 +130,6 @@ class Rag(ww.Service):
 			document_offset,
 			vectors
 		)
-		print('Added document', document_key)
-		print(o.T.SemanticAtom.report())
-		print(o.T.SemanticDocument.report())
-		print(o.T.SemanticDomain.report())
 		return document
 
 	# Remove document and all its atoms (DB + VDB)
@@ -152,8 +153,9 @@ class Rag(ww.Service):
 	# Search
 	# ------------------------------------------------------------------
 	def search(self, domain_id_or_key, query, top_k):
+		ww.Timer.start('search')
 		domain  = o.T.SemanticDomain.load(domain_id_or_key)
-		print('Searching domain', domain)
+		self.print(f'Searching domain `{domain.key}`')
 		results = []
 
 		if domain is not None:
@@ -184,6 +186,7 @@ class Rag(ww.Service):
 
 			for key in d:
 				d[key].sort(key=lambda x: x[0])
+			ww.Timer.stop('search', report=True)
 
 		return d
 
