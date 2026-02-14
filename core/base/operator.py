@@ -1,27 +1,34 @@
-import os, json
+import os, json, inspect
 from datetime import datetime
 
 import ww
 
 
-class Operator(ww.Module):
-	def __init__(self, name=None):
-		self.name = name if name else self.__class__.__name__
-	
-	def __repr__(self) -> str:
-		return f'<Operator {self.name}>'
+class OperatorMeta(type(ww.Module)):
 
-	async def __call__(self, *args, **kwargs):
-		await self.init()
+	def __call__(cls, *args, **kwargs):
+		inst = super().__call__()
+		return inst.__invoke__(*args, **kwargs)
+
+	def __new__(mcls, name, bases, namespace):
+		cls = super().__new__(mcls, name, bases, namespace)
+
+		for attr_name, attr in namespace.items():
+			if not attr_name.startswith('_'):
+				if inspect.isfunction(attr):
+					if not inspect.iscoroutinefunction(attr):
+						raise TypeError(f'Method `{name}.{attr_name}` must be async')
+		return cls
+
+
+class Operator(ww.Module, metaclass=OperatorMeta):
+
+	async def __invoke__(self, *args, **kwargs):
+		await self.initialize()
 		return await self.invoke(*args, **kwargs)
 
-	# ======================================================================
-	# PUBLIC METHODS
-	# ======================================================================
-
-	async def init(self):
-		pass
+	async def initialize(self):
+		raise NotImplementedError
 
 	async def invoke(self, *args, **kwargs):
-		raise NotImplementedError('Operator must implement invoke method')
-
+		raise NotImplementedError

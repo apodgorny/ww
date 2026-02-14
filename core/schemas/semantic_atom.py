@@ -4,11 +4,11 @@ o.T.SemanticDocument
 
 
 class SemanticAtom(o.Schema):
-	document = o.F(o.T.SemanticDocument)
-	item_id  = o.F(int)
-	text     = o.F(str)
-	vector   = o.F(yo.T.Tensor)
-	created  = o.F(int)
+	document = o.F( o.T.SemanticDocument, 'Document containing atom' )
+	item_id  = o.F( int,                  'Id of item in database'   )
+	text     = o.F( str,                  'Actual text of atom'      )
+	vector   = o.F( yo.T.Tensor,          'Vectorized text'          )
+	created  = o.F( int,                  'Time created'             )
 
 	# ======================================================================
 	# PUBLIC METHODS

@@ -1,78 +1,72 @@
-import os, re
+# ======================================================================
+# Model base class
+# ======================================================================
 
-from pydantic import BaseModel
-
-from wordwield.core.module import Module
-from wordwield.core.string import String
-from wordwield.core.o      import O
-from wordwield.core.t      import T
+import ww
 
 
-class Model:
+class Model(ww.Module):
 
-	##################################################################
+	# ------------------------------------------------------------------
+	def __init__(self, model_name):
+		self.model_name = model_name
 
-	@classmethod
-	def load(cls, model_id, models_registry):
-		if '::' not in model_id:
-			raise ValueError(f'Invalid model_id: `{model_id}`. Expected format `provider::name`')
+	# ======================================================================
+	# PUBLIC METHODS
+	# ======================================================================
 
-		provider, model_name = model_id.split('::', 1)
-		model_key            = f'{String.snake_to_camel(provider)}Model'
-		model_class          = models_registry[model_key]
-		model                = model_class(model_name)
-		model.model_id       = model_id
-
-		return model
-	
-	@classmethod
-	def restart(cls):
-		if hasattr(cls, 'model'):
-			cls.model.restart_model()
-		
-	##################################################################
-
-	@classmethod
-	def validate(cls, data: dict, schema: O):
-		'''
-		Filters out extra fields from data and returns an instance of schema,
-		filling with schema defaults for missing fields.
-		'''
-		field_names   = set(schema.model_fields.keys())
-		data_filtered = {k: v for k, v in data.items() if k in field_names}
-		default       = schema.to_default().to_dict()
-		default.update(data_filtered)
-		schema(**default)
-		return default
-
-	@classmethod
 	async def generate(
-		cls,
-		ww,
+		self,
+		prompt,
+		schema,
+		system      = None,
+		temperature = 0.0,
+		verbose     = True
+	):
+
+		self.verbose = verbose
+		if self.verbose: print(f'\n========================[ 😎 ]========================\n')
+
+		system_prompt = self._get_system_prompt(system, schema)
+
+		messages = [
+			{'role': 'system', 'content': system_prompt},
+			{'role': 'user',   'content': prompt}
+		]
+
+		print(f'{"-"*50}\nUSER PROMPT:\n{"-"*50}\n{prompt}')
+		print(f'{"-"*50}\nSYSTEM PROMPT:\n{"-"*50}\n{system_prompt}')
+
+		if self.verbose: print(f'\n=====================[ {self.model_name} ]=====================')
 		
-		prompt          : str,
-		response_schema : O,
-
-		model_id        : str,
-		role            : str        = 'user',
-		temperature     : float      = 0.0,
-		system          : str | None = None,
-		verbose         : bool       = True
-
-	) -> dict:
-		if not issubclass(response_schema, O):
-			raise ValueError(f'Model.generate requires `response_model` to be a subclass of `O`, but received `{type(response_schema)}`')
-
-		cls.model  = Model.load(model_id, ww.models)
-		result = await cls.model(
-			prompt          = prompt,
-			response_schema = response_schema.to_jsonschema(),
-			role            = role,
-			temperature     = temperature,
-			system          = system,
-			verbose         = verbose
+		response = await self.generate_json(
+			messages    = messages,
+			schema      = schema,
+			temperature = temperature,
+			verbose     = verbose
 		)
-		return cls.validate(result, response_schema)
-		
-	def restart_model(self):
-		pass
+
+		print(response)
+
+		return response
+
+	# ======================================================================
+	# PRIVATE METHODS
+	# ======================================================================
+
+	def _get_system_prompt(self, system, schema):
+		default_prompt = (
+			'Return ONLY strict valid JSON.\n'
+			'Skip explanations.\n'
+			'Skip markdown.\n'
+			'Skip extra text.\n'
+			'Fill the following JSON template with values:\n'
+		)
+		default_prompt += schema.to_prompt()
+
+		return default_prompt if system is None else system
+
+	# ------------------------------------------------------------------
+
+	async def _generate_json(self, messages, schema, temperature, verbose):
+		raise NotImplementedError('Provider must implement `_generate_json`')
